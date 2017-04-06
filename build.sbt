@@ -18,6 +18,8 @@ libraryDependencies ++= {
     "org.scalatest"     %% "scalatest"       % "2.2.0"       % "test",
     "com.typesafe.slick" %% "slick" % "3.1.1",
     "com.github.tototoshi" %% "slick-joda-mapper" % "2.1.0",
-    "com.h2database" % "h2" % "1.4.190"
+    "com.h2database" % "h2" % "1.4.190",
+    "joda-time" % "joda-time" % "2.9.9",
+    "org.joda" % "joda-convert" % "1.8.1"
   )
 }
