@@ -5,6 +5,7 @@ import akka.pattern.pipe
 import akka.pattern.ask
 import akka.util.Timeout
 import com.ouspark.model.BookActor._
+import com.ouspark.model.PublisherActor.Publisher
 import com.ouspark.persistence.BookPersistence
 import org.joda.time.LocalDate
 
@@ -21,7 +22,7 @@ object BookActor {
   def name = "bookActor"
 
   case class Book(isbn: String, title: String, author: String, publishDate: LocalDate, publisherId: Long)
-  case class Publisher(id: Option[Long], name: String)
+
   case class BookUpdatePayload(title: String, author: String, publishDate: LocalDate)
   case class BookCreatePayload(isbn: String, title: String, author: String, publishDate: LocalDate)
 

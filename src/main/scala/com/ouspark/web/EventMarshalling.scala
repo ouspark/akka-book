@@ -4,6 +4,7 @@ package com.ouspark.web
 import org.joda.time.LocalDate
 import org.joda.time.format.ISODateTimeFormat
 import com.ouspark.model.BookActor._
+import com.ouspark.model.PublisherActor.Publisher
 import spray.json.{DefaultJsonProtocol, JsString, JsValue, JsonFormat, deserializationError}
 
 /**

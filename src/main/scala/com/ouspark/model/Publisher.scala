@@ -46,6 +46,8 @@ object PublisherActor {
   def props(implicit timeout: Timeout) = Props(new PublisherActor)
   def name = "publisherActor"
 
+  case class Publisher(id: Option[Long], name: String)
+
   case object GetPublishers
   case class GetPublisher(id: Long)
   case class UpdatePublisher(id: Long, name: String)

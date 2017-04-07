@@ -1,6 +1,6 @@
 package com.ouspark.persistence
 
-import com.ouspark.model.BookActor.Publisher
+import com.ouspark.model.PublisherActor.Publisher
 import slick.driver.H2Driver.api._
 
 /**

@@ -53,7 +53,7 @@ trait BookRestApi extends EventMarshalling {
     }
   }
 
-  def bookRoute = pathPrefix("books" / Segment) { isbn =>
+  def bookRoute = pathPrefix("books" / """\d{3}[-]\d{10}""".r) { isbn =>
     pathEndOrSingleSlash {
       get {
         onSuccess(getBook(isbn)) {
@@ -115,17 +115,17 @@ trait PublisherRestRoute extends EventMarshalling {
     }
   }
 
-  def publisherRoute = pathPrefix("publishers" / Segment) { id =>
+  def publisherRoute = pathPrefix("publishers" / LongNumber) { id =>
     pathEndOrSingleSlash {
       get {
-        onSuccess(getPublisher(id.toLong)) {
+        onSuccess(getPublisher(id)) {
           _.fold(complete(NotFound))(e => complete(OK, e))
         }
       } ~
       put {
         entity(as[Publisher]) { payload =>
           rejectEmptyResponse {
-            onSuccess(updatePublisher(id.toLong, payload.name)) {
+            onSuccess(updatePublisher(id, payload.name)) {
               _.fold(complete(NotFound))(e => complete(OK, e))
             }
           }
@@ -133,7 +133,7 @@ trait PublisherRestRoute extends EventMarshalling {
       } ~
       delete {
         complete {
-          deletePublisher(id.toLong) map {
+          deletePublisher(id) map {
             case true => NoContent
             case _ => NotFound
           }
@@ -142,7 +142,7 @@ trait PublisherRestRoute extends EventMarshalling {
       post {
         rejectEmptyResponse {
           entity(as[BookCreatePayload]) { payload =>
-            val newBook = Book(payload.isbn, payload.title, payload.author, payload.publishDate, id.toLong)
+            val newBook = Book(payload.isbn, payload.title, payload.author, payload.publishDate, id)
             onComplete(addBook(newBook)) {
               case Success(Some(bookResource)) => complete(Created, bookResource)
               case Success(_) => complete(NotFound)

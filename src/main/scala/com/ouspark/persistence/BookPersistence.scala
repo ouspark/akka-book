@@ -1,6 +1,7 @@
 package com.ouspark.persistence
 
-import com.ouspark.model.BookActor.{Book, Publisher}
+import com.ouspark.model.BookActor.Book
+import com.ouspark.model.PublisherActor.Publisher
 import org.joda.time.LocalDate
 import com.github.tototoshi.slick.H2JodaSupport._
 import slick.driver.H2Driver.api._
