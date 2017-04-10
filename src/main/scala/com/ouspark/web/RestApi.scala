@@ -6,9 +6,11 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.ouspark.model.BookActor._
 import com.ouspark.model.PublisherActor._
-import com.ouspark.model.{BookActor, PublisherActor}
+import com.ouspark.model.{BookActor, PublisherActor, User, UserActor}
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.server.directives.Credentials
+import com.ouspark.model.UserActor.GetUser
 import org.joda.time.LocalDate
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -23,7 +25,7 @@ class RestApi(actorSystem: ActorSystem, timeout: Timeout) extends BookRestRoute 
 
   def createBookActor = actorSystem.actorOf(BookActor.props, BookActor.name)
   def createPublisherActor = actorSystem.actorOf(PublisherActor.props, PublisherActor.name)
-
+  val userActor: ActorRef = actorSystem.actorOf(UserActor.props, UserActor.name)
 }
 
 trait BookRestRoute extends BookRestApi with PublisherRestRoute {
@@ -41,12 +43,39 @@ trait BookRestApi extends EventMarshalling {
   implicit val requestTimeout: Timeout
   lazy val bookActor = createBookActor()
 
+  val userActor: ActorRef
+
+  def myUserPassAuthenticator(credentials: Credentials): Future[Option[String]] =
+    credentials match {
+      case p @ Credentials.Provided(id) =>
+        userActor.ask(GetUser(id)).mapTo[Option[User]] map {
+          case Some(user) =>
+            if(p.verify(user.password, com.ouspark.security.PasswordHasher.hash(_, user.salt)))
+              Some(id+" password: "+user.password + " salt " + user.salt)
+            else
+              None
+          case _ => None
+//          _.fold(None)(u => if(p.verify(u.password.toString, com.ouspark.security.PasswordHasher.hash(_, u.salt).toString)) Some(id) else None)
+        }
+
+//        Future {
+//          if (p.verify() Some(id)
+//          else None
+//        }
+      case _ => Future.successful(None)
+    }
+
   def booksRoute = pathPrefix("books") {
     pathEndOrSingleSlash {
       pathEndOrSingleSlash {
         get {
           onSuccess(getBooks()) { result =>
             complete (OK, result)
+          }
+        } ~
+        post {
+          authenticateBasicAsync(realm = "secure site", myUserPassAuthenticator) { userName =>
+            complete(s"The user is '$userName'")
           }
         }
       }
@@ -94,6 +123,7 @@ trait PublisherRestRoute extends EventMarshalling {
   implicit val requestTimeout: Timeout
 
   lazy val publisherActor = createPublisherActor()
+
 
   def publishersRoute = pathPrefix("publishers") {
     pathEndOrSingleSlash {

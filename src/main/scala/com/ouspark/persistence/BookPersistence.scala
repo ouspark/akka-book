@@ -4,7 +4,9 @@ import com.ouspark.model.BookActor.Book
 import com.ouspark.model.PublisherActor.Publisher
 import org.joda.time.LocalDate
 import com.github.tototoshi.slick.H2JodaSupport._
+import com.ouspark.model.User
 import slick.driver.H2Driver.api._
+
 import scala.language.postfixOps
 /**
   * Created by spark.ou on 4/1/2017.
@@ -13,11 +15,13 @@ class BookPersistence {
 
   import com.ouspark.persistence.Books._
   import com.ouspark.persistence.Publishers._
+  import com.ouspark.persistence.Users._
+  import com.ouspark.security.PasswordHasher._
   import scala.concurrent.ExecutionContext.Implicits.global
 
   lazy val db = Database.forConfig("db")
 
-  def createSchema() = db.run(DBIO.seq((books.schema ++ publishers.schema).create))
+  def createSchema() = db.run(DBIO.seq((books.schema ++ publishers.schema ++ users.schema).create))
   def createDataset() = db.run(DBIO.seq(
     publishers ++= Seq(
       Publisher(Some(1), "Packt Publishing"),
@@ -28,6 +32,12 @@ class BookPersistence {
       Book("978-1783281411", "Learning Concurrent Programming in Scala", "Aleksandar Prokopec", new LocalDate(2014, 11, 25), 1),
       Book("978-1783283637", "Scala for Java Developers", "Thomas Alexandre", new LocalDate(2014, 6, 11), 1),
       Book("978-1935182757", "Scala in Action", "Nilanjan Raychaudhuri", new LocalDate(2013, 4, 13), 2)
+    ),
+
+    users ++= Seq(
+      new User("admin", hash("passw0rd")),
+      new User("librarian", hash("passw0rd")),
+      new User("user", hash("passw0rd"))
     )
   ))
 
@@ -78,6 +88,20 @@ class BookPersistence {
 
   def addBook(book: Book) = {
     db.run(books += book)
+  }
+
+  def findUserByUsername(username: String) = {
+    val query = for(user <- users.filter(_.username === username)) yield user
+    db.run(query.result.headOption)
+//    val query = for {
+//      (u, p) <- users.filter(_.username === username).joinLeft(userPermissions).on(_.username === _.username)
+//    } yield (u, p.map(_.permission))
+//
+//    db.run(query.result) map { result =>
+//      result groupBy (_._1) map { case (key, value) =>
+//        key.copy(permissions = result.filter(_._1.username == key.username).map(_._2).flatten)
+//      } headOption
+//    }
   }
 
 }
