@@ -4,7 +4,7 @@ import com.ouspark.model.BookActor.Book
 import com.ouspark.model.PublisherActor.Publisher
 import org.joda.time.LocalDate
 import com.github.tototoshi.slick.H2JodaSupport._
-import com.ouspark.model.User
+import com.ouspark.model.{Permissions, User}
 import slick.driver.H2Driver.api._
 
 import scala.language.postfixOps
@@ -35,7 +35,7 @@ class BookPersistence {
     ),
 
     users ++= Seq(
-      new User("admin", hash("passw0rd")),
+      new User("admin", hash("passw0rd"), Seq(Permissions.MANAGE_USERS, Permissions.MANAGE_PUBLISHERS)),
       new User("librarian", hash("passw0rd")),
       new User("user", hash("passw0rd"))
     )

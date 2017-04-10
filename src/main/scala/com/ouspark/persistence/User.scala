@@ -7,7 +7,7 @@ import slick.driver.H2Driver.api._
   */
 class Users(tag: Tag) extends Table[User](tag, "USERS") {
   def username = column[String]("USERNAME", O.PrimaryKey, O.Length(128))
-  def password = column[String]("PASSWORD", O.Length(128))
+  def password = column[Array[Byte]]("PASSWORD", O.Length(128))
   def salt = column[Array[Byte]]("SALT", O.Length(32))
 
   def * = (username, password, salt).shaped <> (

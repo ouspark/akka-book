@@ -10,7 +10,7 @@ import com.ouspark.model.{BookActor, PublisherActor, User, UserActor}
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import akka.http.scaladsl.server.directives.Credentials
-import com.ouspark.model.UserActor.GetUser
+import com.ouspark.model.UserActor.{GetUser, UserPayload}
 import org.joda.time.LocalDate
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -45,23 +45,15 @@ trait BookRestApi extends EventMarshalling {
 
   val userActor: ActorRef
 
-  def myUserPassAuthenticator(credentials: Credentials): Future[Option[String]] =
+  import com.ouspark.security.PasswordHasher._
+  def myUserPassAuthenticator(credentials: Credentials): Future[Option[UserPayload]] =
     credentials match {
       case p @ Credentials.Provided(id) =>
         userActor.ask(GetUser(id)).mapTo[Option[User]] map {
           case Some(user) =>
-            if(p.verify(user.password, com.ouspark.security.PasswordHasher.hash(_, user.salt)))
-              Some(id+" password: "+user.password + " salt " + user.salt)
-            else
-              None
+            if(p.verify(hasherString(user.password), hasherString(_, user.salt))) Some(UserPayload(user.username, user.permissions)) else None
           case _ => None
-//          _.fold(None)(u => if(p.verify(u.password.toString, com.ouspark.security.PasswordHasher.hash(_, u.salt).toString)) Some(id) else None)
         }
-
-//        Future {
-//          if (p.verify() Some(id)
-//          else None
-//        }
       case _ => Future.successful(None)
     }
 
@@ -74,8 +66,8 @@ trait BookRestApi extends EventMarshalling {
           }
         } ~
         post {
-          authenticateBasicAsync(realm = "secure site", myUserPassAuthenticator) { userName =>
-            complete(s"The user is '$userName'")
+          authenticateBasicAsync(realm = "secure site", myUserPassAuthenticator) { user =>
+            complete(user)
           }
         }
       }
