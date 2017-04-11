@@ -4,7 +4,7 @@ import com.ouspark.model.BookActor.Book
 import com.ouspark.model.PublisherActor.Publisher
 import org.joda.time.LocalDate
 import com.github.tototoshi.slick.H2JodaSupport._
-import com.ouspark.model.{Permissions, User}
+import com.ouspark.model.{Permission, Permissions, User}
 import slick.driver.H2Driver.api._
 
 import scala.language.postfixOps
@@ -16,12 +16,13 @@ class BookPersistence {
   import com.ouspark.persistence.Books._
   import com.ouspark.persistence.Publishers._
   import com.ouspark.persistence.Users._
+  import com.ouspark.persistence.UserPermissions._
   import com.ouspark.security.PasswordHasher._
   import scala.concurrent.ExecutionContext.Implicits.global
 
   lazy val db = Database.forConfig("db")
 
-  def createSchema() = db.run(DBIO.seq((books.schema ++ publishers.schema ++ users.schema).create))
+  def createSchema() = db.run(DBIO.seq((books.schema ++ publishers.schema ++ users.schema ++ permissions.schema).create))
   def createDataset() = db.run(DBIO.seq(
     publishers ++= Seq(
       Publisher(Some(1), "Packt Publishing"),
@@ -35,9 +36,15 @@ class BookPersistence {
     ),
 
     users ++= Seq(
-      new User("admin", hash("passw0rd"), Seq(Permissions.MANAGE_USERS, Permissions.MANAGE_PUBLISHERS)),
+      new User("admin", hash("passw0rd")),
       new User("librarian", hash("passw0rd")),
       new User("user", hash("passw0rd"))
+    ),
+
+    permissions ++= Seq(
+//      Permission("admin", Permissions.MANAGE_BOOKS),
+      Permission("admin", Permissions.MANAGE_PUBLISHERS),
+      Permission("librarian", Permissions.MANAGE_BOOKS)
     )
   ))
 
@@ -102,6 +109,11 @@ class BookPersistence {
 //        key.copy(permissions = result.filter(_._1.username == key.username).map(_._2).flatten)
 //      } headOption
 //    }
+  }
+
+  def checkPermission(user: User, permission: Permissions.Permission) = {
+    val query = for(permission <- permissions.filter(_.username === user.username).filter(_.permission === permission)) yield permission
+    db.run(query.result.headOption) map { !_.isEmpty }
   }
 
 }

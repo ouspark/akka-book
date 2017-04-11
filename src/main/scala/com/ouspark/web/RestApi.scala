@@ -1,19 +1,18 @@
 package com.ouspark.web
 
 import akka.actor.{ActorRef, ActorSystem}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
 import akka.util.Timeout
 import com.ouspark.model.BookActor._
 import com.ouspark.model.PublisherActor._
-import com.ouspark.model.{BookActor, PublisherActor, User, UserActor}
-import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.server.directives.Credentials
-import com.ouspark.model.UserActor.{GetUser, UserPayload}
+import com.ouspark.model.{BookActor, Permissions, PublisherActor, UserActor}
+import com.ouspark.security.AuthenticationService
 import org.joda.time.LocalDate
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
 
 /**
@@ -45,17 +44,8 @@ trait BookRestApi extends EventMarshalling {
 
   val userActor: ActorRef
 
-  import com.ouspark.security.PasswordHasher._
-  def myUserPassAuthenticator(credentials: Credentials): Future[Option[UserPayload]] =
-    credentials match {
-      case p @ Credentials.Provided(id) =>
-        userActor.ask(GetUser(id)).mapTo[Option[User]] map {
-          case Some(user) =>
-            if(p.verify(hasherString(user.password), hasherString(_, user.salt))) Some(UserPayload(user.username, user.permissions)) else None
-          case _ => None
-        }
-      case _ => Future.successful(None)
-    }
+  lazy val authService = new AuthenticationService(userActor, requestTimeout)
+
 
   def booksRoute = pathPrefix("books") {
     pathEndOrSingleSlash {
@@ -66,8 +56,11 @@ trait BookRestApi extends EventMarshalling {
           }
         } ~
         post {
-          authenticateBasicAsync(realm = "secure site", myUserPassAuthenticator) { user =>
-            complete(user)
+          authenticateBasicAsync(realm = "secure site", authService.userAuthentication) { user =>
+            authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_PUBLISHERS)) {
+
+              complete(user.username)
+            }
           }
         }
       }
@@ -83,7 +76,7 @@ trait BookRestApi extends EventMarshalling {
       } ~
         put {
           entity(as[BookUpdatePayload]) { payload =>
-            rejectEmptyResponse {
+            authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { => user
               onSuccess(updateBook(isbn, payload.title, payload.author, payload.publishDate)) {
                 _.fold(complete(NotFound))(e => complete(OK, e))
               }

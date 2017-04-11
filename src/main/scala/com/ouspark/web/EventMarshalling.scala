@@ -1,15 +1,12 @@
 package com.ouspark.web
 
-
-
-
 import com.ouspark.model.BookActor._
 import com.ouspark.model.Permissions
 import com.ouspark.model.PublisherActor.Publisher
 import com.ouspark.model.UserActor.UserPayload
 import org.joda.time.LocalDate
 import org.joda.time.format.ISODateTimeFormat
-import spray.json.{DefaultJsonProtocol, JsArray, JsObject, JsString, JsValue, JsonFormat, deserializationError}
+import spray.json.{DefaultJsonProtocol, JsArray, JsString, JsValue, JsonFormat, deserializationError}
 
 /**
   * Created by spark.ou on 4/1/2017.
@@ -28,9 +25,7 @@ trait EventMarshalling extends DefaultJsonProtocol {
   }
 
   implicit object PermissionJsonProtocol extends JsonFormat[Seq[Permissions.Permission]] {
-    def write(permission: Seq[Permissions.Permission]) = JsObject(
-      Map("permissions" -> JsArray(JsString(permission.toString))
-    ))
+    def write(permission: Seq[Permissions.Permission]) = JsArray(JsString(permission.toString))
     def read(value: JsValue) = value match {
       case JsArray(permissions) => permissions.map(_.toString).map(Permissions.withName(_))
       case _ => deserializationError("String value expected")

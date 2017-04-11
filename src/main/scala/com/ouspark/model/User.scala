@@ -5,7 +5,7 @@ import akka.pattern.pipe
 import akka.http.scaladsl.server.directives.Credentials
 
 import scala.concurrent.Future
-import com.ouspark.model.UserActor.{Authenticate, GetUser}
+import com.ouspark.model.UserActor.{Authenticate, GetUser, HasPermission}
 import com.ouspark.persistence.BookPersistence
 
 /**
@@ -14,16 +14,12 @@ import com.ouspark.persistence.BookPersistence
 object Permissions extends Enumeration {
   type Permission = Value
   val MANAGE_PUBLISHERS = Value("MANAGE_PUBLISHERS")
-  val MANAGE_USERS = Value("MANAGE_USERS")
+  val MANAGE_BOOKS = Value("MANAGE_BOOKS")
 }
 
-case class User(username: String, password: Array[Byte], salt: Array[Byte], permissions: Seq[Permissions.Permission] = Seq()) {
+case class User(username: String, password: Array[Byte], salt: Array[Byte]) {
   def this(username: String, saltedPassword: (Array[Byte], Array[Byte])) {
     this(username, saltedPassword._1, saltedPassword._2)
-  }
-
-  def this(username: String, saltedPassword: (Array[Byte], Array[Byte]), permissions: Seq[Permissions.Permission]) {
-    this(username, saltedPassword._1, saltedPassword._2, permissions)
   }
 }
 
@@ -36,6 +32,7 @@ class UserActor extends Actor {
   def receive = {
     case Authenticate(credentials) => Future.successful(Some(credentials)) pipeTo sender()
     case GetUser(username) => persistence.findUserByUsername(username) pipeTo sender()
+    case HasPermission(user, permission) => persistence.checkPermission(user, permission) pipeTo sender()
 
   }
 }
@@ -48,4 +45,5 @@ object UserActor {
   case class CreateUser(username: String, password: String)
   case class GetUser(username: String)
   case class UserPayload(username: String, permissions: Seq[Permissions.Permission])
+  case class HasPermission(user: User, permission: Permissions.Permission)
 }
