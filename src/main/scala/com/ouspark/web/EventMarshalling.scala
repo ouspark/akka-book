@@ -18,7 +18,7 @@ trait EventMarshalling extends DefaultJsonProtocol {
 
     def write(date: LocalDate) = JsString(date.toString(formatter))
 
-    def read(value: JsValue) = value match {
+    def read(value: JsValue): LocalDate = value match {
       case JsString(date) => formatter.parseLocalDate(date)
       case _ => deserializationError("String value expected")
     }
@@ -26,8 +26,8 @@ trait EventMarshalling extends DefaultJsonProtocol {
 
   implicit object PermissionJsonProtocol extends JsonFormat[Seq[Permissions.Permission]] {
     def write(permission: Seq[Permissions.Permission]) = JsArray(JsString(permission.toString))
-    def read(value: JsValue) = value match {
-      case JsArray(permissions) => permissions.map(_.toString).map(Permissions.withName(_))
+    def read(value: JsValue): Vector[_root_.com.ouspark.model.Permissions.Value] = value match {
+      case JsArray(permissions) => permissions.map(_.toString).map(Permissions.withName)
       case _ => deserializationError("String value expected")
     }
   }
@@ -38,6 +38,9 @@ trait EventMarshalling extends DefaultJsonProtocol {
   implicit val bookUpdateFormat = jsonFormat3(BookUpdatePayload.apply)
   implicit val bookCreateFormat = jsonFormat4(BookCreatePayload.apply)
   implicit val userFormat = jsonFormat2(UserPayload.apply)
+  implicit val bookVolumeFormat = jsonFormat7(BookVolumeInfo.apply)
+  implicit val bookSearchResultItemFormat = jsonFormat1(BookSearchResultItem.apply)
+  implicit val bookSearchResultFormat = jsonFormat2(BookSearchResult.apply)
 }
 
 

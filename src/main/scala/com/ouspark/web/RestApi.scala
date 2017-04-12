@@ -6,6 +6,8 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
 import akka.util.Timeout
+import com.ouspark.integrations.GoogleBooksClient
+import com.ouspark.integrations.GoogleBooksClient.SearchBook
 import com.ouspark.model.BookActor._
 import com.ouspark.model.PublisherActor._
 import com.ouspark.model.{BookActor, Permissions, PublisherActor, UserActor}
@@ -25,14 +27,16 @@ class RestApi(actorSystem: ActorSystem, timeout: Timeout) extends BookRestRoute 
   def createBookActor = actorSystem.actorOf(BookActor.props, BookActor.name)
   def createPublisherActor = actorSystem.actorOf(PublisherActor.props, PublisherActor.name)
   val userActor: ActorRef = actorSystem.actorOf(UserActor.props, UserActor.name)
+  def createGoogleBooksClient = actorSystem.actorOf(GoogleBooksClient.props, GoogleBooksClient.name)
+
+  val authService = new AuthenticationService(userActor, requestTimeout)
 }
 
-trait BookRestRoute extends BookRestApi with PublisherRestRoute {
+trait BookRestRoute extends BookRestApi with PublisherRestRoute with BookSearchServiceRoute {
 
   val routes = pathPrefix("api" / "v1") {
-    booksRoute ~ bookRoute ~ publishersRoute ~ publisherRoute
+    booksRoute ~ bookRoute ~ publishersRoute ~ publisherRoute ~ searchBooks
   }
-
 }
 
 trait BookRestApi extends EventMarshalling {
@@ -43,9 +47,7 @@ trait BookRestApi extends EventMarshalling {
   lazy val bookActor = createBookActor()
 
   val userActor: ActorRef
-
-  lazy val authService = new AuthenticationService(userActor, requestTimeout)
-
+  val authService: AuthenticationService
 
   def booksRoute = pathPrefix("books") {
     pathEndOrSingleSlash {
@@ -53,14 +55,6 @@ trait BookRestApi extends EventMarshalling {
         get {
           onSuccess(getBooks()) { result =>
             complete (OK, result)
-          }
-        } ~
-        post {
-          authenticateBasicAsync(realm = "secure site", authService.userAuthentication) { user =>
-            authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_PUBLISHERS)) {
-
-              complete(user.username)
-            }
           }
         }
       }
@@ -76,18 +70,24 @@ trait BookRestApi extends EventMarshalling {
       } ~
         put {
           entity(as[BookUpdatePayload]) { payload =>
-            authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { => user
-              onSuccess(updateBook(isbn, payload.title, payload.author, payload.publishDate)) {
-                _.fold(complete(NotFound))(e => complete(OK, e))
+            authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { user =>
+              authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_BOOKS)) {
+                onSuccess(updateBook(isbn, payload.title, payload.author, payload.publishDate)) {
+                  _.fold(complete(NotFound))(e => complete(OK, e))
+                }
               }
             }
           }
         } ~
         delete {
-          complete {
-            deleteBook(isbn) map {
-              case true => NoContent
-              case _ => NotFound
+          authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { user =>
+            authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_BOOKS)) {
+              complete {
+                deleteBook(isbn) map {
+                  case true => NoContent
+                  case _ => NotFound
+                }
+              }
             }
           }
         }
@@ -109,6 +109,8 @@ trait PublisherRestRoute extends EventMarshalling {
 
   lazy val publisherActor = createPublisherActor()
 
+  val userActor: ActorRef
+  val authService: AuthenticationService
 
   def publishersRoute = pathPrefix("publishers") {
     pathEndOrSingleSlash {
@@ -118,11 +120,13 @@ trait PublisherRestRoute extends EventMarshalling {
         }
       } ~
       post {
-        rejectEmptyResponse {
-          entity(as[Publisher]) { payload =>
-            onComplete(addPublisher(payload.name)) {
-              case Success(publisher) => complete(Created, publisher)
-              case Failure(ex) => complete(Conflict)
+        authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { user =>
+          authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_PUBLISHERS)) {
+            entity(as[Publisher]) { payload =>
+              onComplete(addPublisher(payload.name)) {
+                case Success(publisher) => complete(Created, publisher)
+                case Failure(ex) => complete(Conflict)
+              }
             }
           }
         }
@@ -138,30 +142,38 @@ trait PublisherRestRoute extends EventMarshalling {
         }
       } ~
       put {
-        entity(as[Publisher]) { payload =>
-          rejectEmptyResponse {
-            onSuccess(updatePublisher(id, payload.name)) {
-              _.fold(complete(NotFound))(e => complete(OK, e))
+        authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { user =>
+          authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_PUBLISHERS)) {
+            entity(as[Publisher]) { payload =>
+              onSuccess(updatePublisher(id, payload.name)) {
+                _.fold(complete(NotFound))(e => complete(OK, e))
+              }
             }
           }
         }
       } ~
       delete {
-        complete {
-          deletePublisher(id) map {
-            case true => NoContent
-            case _ => NotFound
+        authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { user =>
+          authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_PUBLISHERS)) {
+            complete {
+              deletePublisher(id) map {
+                case true => NoContent
+                case _ => NotFound
+              }
+            }
           }
         }
       } ~
       post {
-        rejectEmptyResponse {
-          entity(as[BookCreatePayload]) { payload =>
-            val newBook = Book(payload.isbn, payload.title, payload.author, payload.publishDate, id)
-            onComplete(addBook(newBook)) {
-              case Success(Some(bookResource)) => complete(Created, bookResource)
-              case Success(_) => complete(NotFound)
-              case Failure(ex) => complete(Conflict)
+        authenticateBasicAsync(realm = "Secure site", authService.userAuthentication) { user =>
+          authorizeAsync(_ => authService.userHasPermission(user, Permissions.MANAGE_BOOKS)) {
+            entity(as[BookCreatePayload]) { payload =>
+              val newBook = Book(payload.isbn, payload.title, payload.author, payload.publishDate, id)
+              onComplete(addBook(newBook)) {
+                case Success(Some(bookResource)) => complete(Created, bookResource)
+                case Success(_) => complete(NotFound)
+                case Failure(ex) => complete(Conflict)
+              }
             }
           }
         }
@@ -175,4 +187,30 @@ trait PublisherRestRoute extends EventMarshalling {
   def deletePublisher(id: Long) = publisherActor.ask(DeletePublisher(id)).mapTo[Boolean]
   def addPublisher(name: String) = publisherActor.ask(AddPublisher(name)).mapTo[Publisher]
   def addBook(book: Book) = publisherActor.ask(AddBook(book)).mapTo[Option[BookResource]]
+}
+
+
+trait BookSearchServiceRoute extends EventMarshalling {
+
+  import scala.concurrent.duration._
+  import scala.language.postfixOps
+  implicit def executionContext: ExecutionContext
+  implicit val timeout: Timeout = 5 seconds
+  def createGoogleBooksClient(): ActorRef
+  lazy val client = createGoogleBooksClient()
+
+  def searchBooks = pathPrefix("search") {
+    pathEndOrSingleSlash {
+      get {
+        parameters('query) { query =>
+          onComplete(searchBook(query)) {
+            case Success(results) => complete(results)
+            case Failure(ex) => complete(ex)
+          }
+        }
+      }
+    }
+  }
+
+  def searchBook(query: String) = client.ask(SearchBook(query)).mapTo[List[BookVolumeInfo]]
 }

@@ -1,8 +1,7 @@
 package com.ouspark.model
 
 import akka.actor.{Actor, Props}
-import akka.pattern.pipe
-import akka.pattern.ask
+import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import com.ouspark.model.BookActor._
 import com.ouspark.model.PublisherActor.Publisher
@@ -37,6 +36,18 @@ object BookActor {
   case class GetBook(isbn: String)
   case class UpdateBook(isbn: String, title: String, author: String, publishDate: LocalDate)
   case class DeleteBook(isbn: String)
+
+  case class BookVolumeInfo(
+                             title: String,
+                             publisher: Option[String],
+                             publishedDate: Option[String],
+                             authors: Option[List[String]],
+                             description: Option[String],
+                             pageCount: Option[Int],
+                             language: Option[String]
+                           )
+  case class BookSearchResultItem(volumeInfo: BookVolumeInfo)
+  case class BookSearchResult(totalItems: Int, items: List[BookSearchResultItem])
 
 }
 class BookActor(implicit timeout: Timeout) extends Actor {
